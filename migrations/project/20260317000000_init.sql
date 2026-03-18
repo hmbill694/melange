@@ -1,0 +1,2 @@
+-- Initial project migration — scaffold only.
+-- Project-scoped tables will be added in subsequent migrations.

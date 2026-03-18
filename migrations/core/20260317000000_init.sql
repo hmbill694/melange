@@ -1,0 +1,2 @@
+-- Initial migration — scaffold only. No tables created yet.
+-- All domain tables will be added in subsequent migrations.
