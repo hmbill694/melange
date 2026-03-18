@@ -8,10 +8,13 @@
 
 use anyhow::{anyhow, Result};
 use iced::widget::{column, container, text};
-use iced::{Element, Fill, Task};
+use iced::time::Duration;
+use iced::{Element, Fill, Subscription, Task};
 use std::path::PathBuf;
+use std::time::Instant;
 
 use crate::db::CoreDb;
+use crate::kernel::loading::{loading_indicator, LoadingState, MIN_LOADING_DURATION};
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +28,12 @@ pub struct App {
     /// Holds a startup error message if DB initialization fails.
     /// Displayed instead of the main UI when `Some`.
     init_error: Option<String>,
+
+    /// Tracks the three-phase loading lifecycle (Idle → Loading → Done).
+    loading_state: LoadingState,
+
+    /// Increments on every `Tick` for spinner animation frame selection.
+    tick_count: u32,
 }
 
 impl Default for App {
@@ -32,6 +41,8 @@ impl Default for App {
         Self {
             core_db: None,
             init_error: None,
+            loading_state: LoadingState::Idle,
+            tick_count: 0,
         }
     }
 }
@@ -46,6 +57,13 @@ pub enum Message {
 
     /// Sent when async DB init fails. Carries the error as a human-readable string.
     DbFailed(String),
+
+    /// Fired by the 100ms subscription while loading; advances the spinner animation frame.
+    Tick,
+
+    /// Fired by the one-shot Task after both DB is ready AND 300ms has elapsed.
+    /// Transitions `loading_state` to `Done`.
+    LoadingDone,
     // Future variants added here as new modules are introduced.
 }
 
@@ -54,7 +72,14 @@ pub enum Message {
 /// Called by iced once at startup. Returns the initial state and a `Task` that
 /// resolves the core database asynchronously.
 pub fn new() -> (App, Task<Message>) {
-    let initial_state = App::default();
+    let initial_state = App {
+        loading_state: LoadingState::Loading {
+            started_at: Instant::now(),
+        },
+        tick_count: 0,
+        core_db: None,
+        init_error: None,
+    };
 
     let task = Task::perform(
         async { init_db().await },
@@ -86,13 +111,51 @@ pub fn update(state: &mut App, message: Message) -> Task<Message> {
         Message::DbReady(core_db) => {
             tracing::info!("Core database pool received");
             state.core_db = Some(core_db);
-            Task::none()
+
+            if let LoadingState::Loading { started_at } = state.loading_state {
+                Task::perform(
+                    async move {
+                        let elapsed = started_at.elapsed();
+                        if elapsed < MIN_LOADING_DURATION {
+                            tokio::time::sleep(MIN_LOADING_DURATION - elapsed).await;
+                        }
+                    },
+                    |_| Message::LoadingDone,
+                )
+            } else {
+                Task::none()
+            }
         }
         Message::DbFailed(err) => {
             tracing::error!("Database initialization failed: {}", err);
             state.init_error = Some(err);
+            state.loading_state = LoadingState::Done;
             Task::none()
         }
+        Message::Tick => {
+            state.tick_count = state.tick_count.wrapping_add(1);
+            Task::none()
+        }
+        Message::LoadingDone => {
+            state.loading_state = LoadingState::Done;
+            tracing::info!("Loading complete — minimum duration satisfied");
+            Task::none()
+        }
+    }
+}
+
+// ─── SUBSCRIPTION FUNCTION ───────────────────────────────────────────────────
+
+/// Returns an active subscription when loading, or `Subscription::none()` otherwise.
+///
+/// Fires `Message::Tick` every 100ms while `loading_state` is `Loading`, driving
+/// the spinner animation. Automatically stops once loading completes.
+pub fn subscription(state: &App) -> Subscription<Message> {
+    match state.loading_state {
+        LoadingState::Loading { .. } => {
+            iced::time::every(Duration::from_millis(100)).map(|_| Message::Tick)
+        }
+        _ => Subscription::none(),
     }
 }
 
@@ -105,9 +168,9 @@ pub fn view(state: &App) -> Element<'_, Message> {
         container(text(format!("Failed to initialize database: {}", err)))
             .center(Fill)
             .into()
-    } else if state.core_db.is_none() {
-        // Loading state — CoreDb not yet received
-        container(text("Initializing...")).center(Fill).into()
+    } else if state.loading_state != LoadingState::Done {
+        // Loading state — show animated spinner until minimum duration satisfied
+        loading_indicator("Initialising database…", state.tick_count)
     } else {
         // Ready state — main UI placeholder
         container(column![text("Melange").size(32), text("Ready.")].spacing(10))

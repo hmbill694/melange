@@ -13,6 +13,7 @@
 
 mod app;
 mod db;
+mod kernel;
 mod modules;
 
 use tracing_subscriber::EnvFilter;
@@ -40,5 +41,6 @@ fn main() -> iced::Result {
     // .run() blocks until the window is closed; returns iced::Result
     iced::application(app::new, app::update, app::view)
         .title("Melange")
+        .subscription(app::subscription)
         .run()
 }
