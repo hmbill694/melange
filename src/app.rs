@@ -15,6 +15,7 @@ use std::time::Instant;
 
 use crate::db::CoreDb;
 use crate::kernel::loading::{loading_indicator, LoadingState, MIN_LOADING_DURATION};
+use crate::kernel::opencode::{check_opencode_on_path, opencode_not_found_screen, OpencodeStatus};
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,10 @@ pub struct App {
 
     /// Increments on every `Tick` for spinner animation frame selection.
     tick_count: u32,
+
+    /// Holds the result of the startup opencode binary check.
+    /// `None` means the check has not yet completed.
+    opencode_status: Option<OpencodeStatus>,
 }
 
 impl Default for App {
@@ -43,6 +48,7 @@ impl Default for App {
             init_error: None,
             loading_state: LoadingState::Idle,
             tick_count: 0,
+            opencode_status: None,
         }
     }
 }
@@ -64,6 +70,12 @@ pub enum Message {
     /// Fired by the one-shot Task after both DB is ready AND 300ms has elapsed.
     /// Transitions `loading_state` to `Done`.
     LoadingDone,
+
+    /// Sent when the startup opencode check confirms the binary is on PATH.
+    OpencodeReady,
+
+    /// Sent when the startup opencode check finds the binary is NOT on PATH.
+    OpencodeNotFound,
     // Future variants added here as new modules are introduced.
 }
 
@@ -79,9 +91,10 @@ pub fn new() -> (App, Task<Message>) {
         tick_count: 0,
         core_db: None,
         init_error: None,
+        opencode_status: None,
     };
 
-    let task = Task::perform(
+    let db_task = Task::perform(
         async { init_db().await },
         |result| match result {
             Ok(core_db) => Message::DbReady(core_db),
@@ -89,7 +102,15 @@ pub fn new() -> (App, Task<Message>) {
         },
     );
 
-    (initial_state, task)
+    let opencode_task = Task::perform(
+        async { check_opencode_on_path().await },
+        |status| match status {
+            OpencodeStatus::Found => Message::OpencodeReady,
+            OpencodeStatus::NotFound => Message::OpencodeNotFound,
+        },
+    );
+
+    (initial_state, Task::batch([db_task, opencode_task]))
 }
 
 /// Private async helper that opens the core database. Called only by [`new`].
@@ -141,6 +162,16 @@ pub fn update(state: &mut App, message: Message) -> Task<Message> {
             tracing::info!("Loading complete — minimum duration satisfied");
             Task::none()
         }
+        Message::OpencodeReady => {
+            tracing::info!("opencode binary found on PATH — proceeding normally");
+            state.opencode_status = Some(OpencodeStatus::Found);
+            Task::none()
+        }
+        Message::OpencodeNotFound => {
+            tracing::warn!("opencode binary NOT found on PATH — showing blocked screen");
+            state.opencode_status = Some(OpencodeStatus::NotFound);
+            Task::none()
+        }
     }
 }
 
@@ -162,19 +193,32 @@ pub fn subscription(state: &App) -> Subscription<Message> {
 // ─── VIEW FUNCTION ───────────────────────────────────────────────────────────
 
 /// Render the application UI based on the current [`App`] state.
+///
+/// Priority chain (highest to lowest):
+/// 1. opencode not found → hard block screen
+/// 2. DB init error → centered error message
+/// 3. Still loading OR opencode check not yet resolved → loading spinner
+/// 4. Ready → main UI
 pub fn view(state: &App) -> Element<'_, Message> {
-    if let Some(ref err) = state.init_error {
-        // Centered error message
-        container(text(format!("Failed to initialize database: {}", err)))
-            .center(Fill)
-            .into()
-    } else if state.loading_state != LoadingState::Done {
-        // Loading state — show animated spinner until minimum duration satisfied
-        loading_indicator("Initialising database…", state.tick_count)
-    } else {
-        // Ready state — main UI placeholder
-        container(column![text("Melange").size(32), text("Ready.")].spacing(10))
-            .center(Fill)
-            .into()
+    // Priority 1: opencode not found → hard block (highest priority)
+    if state.opencode_status == Some(OpencodeStatus::NotFound) {
+        return opencode_not_found_screen();
     }
+
+    // Priority 2: DB initialization failed
+    if let Some(ref err) = state.init_error {
+        return container(text(format!("Failed to initialize database: {}", err)))
+            .center(Fill)
+            .into();
+    }
+
+    // Priority 3: still loading OR opencode check not yet resolved
+    if state.loading_state != LoadingState::Done || state.opencode_status.is_none() {
+        return loading_indicator("Initialising…", state.tick_count);
+    }
+
+    // Priority 4: ready — main UI placeholder
+    container(column![text("Melange").size(32), text("Ready.")].spacing(10))
+        .center(Fill)
+        .into()
 }

@@ -16,6 +16,7 @@ impl Default for LoadingState {
 }
 
 /// Returns true if at least MIN_LOADING_DURATION has elapsed since `started_at`.
+#[allow(dead_code)]
 pub fn min_duration_elapsed(started_at: Instant, now: Instant) -> bool {
     now.duration_since(started_at) >= MIN_LOADING_DURATION
 }

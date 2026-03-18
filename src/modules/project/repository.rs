@@ -1,5 +1,7 @@
 //! Repository abstraction and SQLite implementation for the project domain.
 
+#![allow(dead_code)]
+
 use async_trait::async_trait;
 use sqlx::Row;
 use std::path::PathBuf;

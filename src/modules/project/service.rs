@@ -1,5 +1,7 @@
 //! Business logic for the project bounded context.
 
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 

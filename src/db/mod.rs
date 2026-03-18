@@ -21,6 +21,7 @@ use std::str::FromStr;
 /// Holds the `melange.db` connection pool and applies the `migrations/core/`
 /// migration set on construction. Clone is cheap (Arc internally).
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CoreDb {
     pool: SqlitePool,
 }
@@ -54,6 +55,7 @@ impl CoreDb {
     ///
     /// Intended for use in integration tests where the pool is backed by
     /// `sqlite::memory:` and migrations have already been applied.
+    #[allow(dead_code)]
     pub(crate) fn from_pool(pool: SqlitePool) -> CoreDb {
         CoreDb { pool }
     }
@@ -66,10 +68,12 @@ impl CoreDb {
 /// Each project has its own `.db` file. `ProjectDb` applies the
 /// `migrations/project/` migration set on construction. Clone is cheap.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct ProjectDb {
     pool: SqlitePool,
 }
 
+#[allow(dead_code)]
 impl ProjectDb {
     /// Create a new project database at `db_path`, run embedded project
     /// migrations, and return the ready `ProjectDb`.

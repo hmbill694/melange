@@ -8,11 +8,14 @@ Cargo.lock — Auto-generated dependency lock file
 
 ## Source Files
 src/main.rs — Entry point; initialises tracing subscriber and launches the iced GUI via `iced::application(app::new, app::update, app::view).title("Melange").subscription(app::subscription).run()`
-src/app.rs — Top-level iced application: defines `App` state (incl. `loading_state: LoadingState`, `tick_count: u32`), root `Message` enum (incl. `Tick`, `LoadingDone`), and `new`/`update`/`view`/`subscription` free functions; the sole compositor of domain module messages
-src/kernel/mod.rs — Shared kernel namespace; declares `pub mod loading` for cross-cutting UI primitives; kernel modules must not import from `src/modules/`
+src/app.rs — Top-level iced application: defines `App` state (incl. `loading_state: LoadingState`, `tick_count: u32`, `opencode_status: Option<OpencodeStatus>`), root `Message` enum (incl. `Tick`, `LoadingDone`, `OpencodeReady`, `OpencodeNotFound`), and `new`/`update`/`view`/`subscription` free functions; fires opencode check task in parallel with DB init at startup; `view()` uses 4-priority chain (opencode-not-found → db-error → loading → ready)
+src/kernel/mod.rs — Shared kernel namespace; declares `pub mod loading` and `pub mod opencode` for cross-cutting UI primitives; kernel modules must not import from `src/modules/`
 src/kernel/loading/mod.rs — Re-exports `LoadingState`, `MIN_LOADING_DURATION`, `min_duration_elapsed`, and `loading_indicator` as the flat public API for the loading primitive
 src/kernel/loading/domain.rs — Pure domain logic: `LoadingState` enum (Idle/Loading{started_at}/Done), `MIN_LOADING_DURATION` constant (300ms), `min_duration_elapsed` pure function; 4 unit tests covering boundary conditions and default state
 src/kernel/loading/ui.rs — `loading_indicator<'a, Message>(label, tick_count) -> Element` reusable iced view component; braille spinner (8-frame) driven by tick_count mod 8, generic over Message
+src/kernel/opencode/mod.rs — Re-exports `OpencodeStatus`, `check_opencode_on_path`, and `opencode_not_found_screen` as the flat public API for the opencode startup check primitive
+src/kernel/opencode/domain.rs — Pure domain types: `OpencodeStatus` enum (Found/NotFound), async `check_opencode_on_path()` using `tokio::task::spawn_blocking` + `std::process::Command`; 3 unit tests
+src/kernel/opencode/ui.rs — `opencode_not_found_screen<'a, Message>() -> Element` generic iced view; renders centered "opencode is required" blocked screen with install URL as selectable plain text
 src/db/mod.rs — Database connection module; defines `CoreDb` and `ProjectDb` typed pool wrappers with `open`/`create`/`from_pool` constructors and embedded migration runners for each DB type
 src/modules/mod.rs — Namespace for all DDD bounded-context modules; declares `pub mod project` and enforces modulith isolation rules via doc comments
 src/modules/project/mod.rs — Re-exports all public types from the project bounded context (Project, ProjectId, CreateProjectCommand, ProjectError, ProjectRepository, SqliteProjectRepository, ProjectService)

@@ -5,3 +5,4 @@
 //! - Domain modules communicate with each other only through types defined here.
 
 pub mod loading;
+pub mod opencode;

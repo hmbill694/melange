@@ -2,6 +2,8 @@
 //!
 //! No I/O, no async, no database imports. All types here are plain Rust.
 
+#![allow(dead_code)]
+
 use std::fmt;
 use uuid::Uuid;
 

@@ -9,6 +9,9 @@ pub mod domain;
 pub mod repository;
 pub mod service;
 
+#[allow(unused_imports)]
 pub use domain::{CreateProjectCommand, Project, ProjectError, ProjectId};
+#[allow(unused_imports)]
 pub use repository::{ProjectRepository, SqliteProjectRepository};
+#[allow(unused_imports)]
 pub use service::ProjectService;
