@@ -15,6 +15,7 @@ mod app;
 mod db;
 mod kernel;
 mod modules;
+mod ui;
 
 use tracing_subscriber::EnvFilter;
 

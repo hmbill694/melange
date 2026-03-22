@@ -52,6 +52,10 @@ pub struct Project {
     pub name: String,
     pub db_path: std::path::PathBuf,
     pub created_at: String,
+    /// Optional human-readable description for the project.
+    pub description: Option<String>,
+    /// Filesystem path to the project directory, shown in the UI.
+    pub file_path: std::path::PathBuf,
 }
 
 // ─── CreateProjectCommand ─────────────────────────────────────────────────────
@@ -63,6 +67,10 @@ pub struct Project {
 #[derive(Debug, Clone)]
 pub struct CreateProjectCommand {
     pub name: String,
+    /// Optional description for the new project.
+    pub description: Option<String>,
+    /// Filesystem path to the project directory.
+    pub file_path: std::path::PathBuf,
 }
 
 // ─── ProjectError ─────────────────────────────────────────────────────────────

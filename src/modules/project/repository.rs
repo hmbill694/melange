@@ -54,13 +54,17 @@ impl ProjectRepository for SqliteProjectRepository {
         let id_str = project.id.to_string();
         let db_path_str = project.db_path.to_string_lossy().to_string();
 
+        let file_path_str = project.file_path.to_string_lossy().to_string();
+
         let result = sqlx::query(
-            "INSERT OR FAIL INTO projects (id, name, db_path, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT OR FAIL INTO projects (id, name, db_path, created_at, description, file_path) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(&id_str)
         .bind(&project.name)
         .bind(&db_path_str)
         .bind(&project.created_at)
+        .bind(&project.description)
+        .bind(&file_path_str)
         .execute(pool)
         .await;
 
@@ -85,7 +89,7 @@ impl ProjectRepository for SqliteProjectRepository {
         let id_str = id.to_string();
 
         let row = sqlx::query(
-            "SELECT id, name, db_path, created_at FROM projects WHERE id = ?",
+            "SELECT id, name, db_path, created_at, description, file_path FROM projects WHERE id = ?",
         )
         .bind(&id_str)
         .fetch_optional(pool)
@@ -99,6 +103,8 @@ impl ProjectRepository for SqliteProjectRepository {
                 let name: String = r.get("name");
                 let db_path_text: String = r.get("db_path");
                 let created_at: String = r.get("created_at");
+                let description: Option<String> = r.get("description");
+                let file_path_text: String = r.get("file_path");
 
                 let uuid = Uuid::parse_str(&id_text)
                     .map_err(|e| ProjectError::Database(e.to_string()))?;
@@ -108,6 +114,8 @@ impl ProjectRepository for SqliteProjectRepository {
                     name,
                     db_path: PathBuf::from(db_path_text),
                     created_at,
+                    description,
+                    file_path: PathBuf::from(file_path_text),
                 }))
             }
         }
@@ -117,7 +125,7 @@ impl ProjectRepository for SqliteProjectRepository {
         let pool = self.db.pool();
 
         let rows = sqlx::query(
-            "SELECT id, name, db_path, created_at FROM projects ORDER BY created_at ASC",
+            "SELECT id, name, db_path, created_at, description, file_path FROM projects ORDER BY created_at ASC",
         )
         .fetch_all(pool)
         .await
@@ -129,6 +137,8 @@ impl ProjectRepository for SqliteProjectRepository {
             let name: String = r.get("name");
             let db_path_text: String = r.get("db_path");
             let created_at: String = r.get("created_at");
+            let description: Option<String> = r.get("description");
+            let file_path_text: String = r.get("file_path");
 
             let uuid = Uuid::parse_str(&id_text)
                 .map_err(|e| ProjectError::Database(e.to_string()))?;
@@ -138,6 +148,8 @@ impl ProjectRepository for SqliteProjectRepository {
                 name,
                 db_path: PathBuf::from(db_path_text),
                 created_at,
+                description,
+                file_path: PathBuf::from(file_path_text),
             });
         }
 
@@ -167,6 +179,8 @@ mod tests {
             name: "Alpha".to_string(),
             db_path: PathBuf::from("/tmp/alpha.db"),
             created_at: "2026-01-01T00:00:00Z".to_string(),
+            description: None,
+            file_path: PathBuf::from("/tmp/alpha"),
         };
 
         let save_result = repo.save(&project).await;
@@ -199,12 +213,16 @@ mod tests {
             name: "A".to_string(),
             db_path: PathBuf::from("/tmp/a.db"),
             created_at: "2026-01-01T00:00:00Z".to_string(),
+            description: None,
+            file_path: PathBuf::from("/tmp/a"),
         };
         let project_b = Project {
             id: ProjectId::new(),
             name: "B".to_string(),
             db_path: PathBuf::from("/tmp/b.db"),
             created_at: "2026-01-02T00:00:00Z".to_string(),
+            description: None,
+            file_path: PathBuf::from("/tmp/b"),
         };
 
         repo.save(&project_a).await.unwrap();
@@ -228,6 +246,8 @@ mod tests {
             name: "Dup".to_string(),
             db_path: PathBuf::from("/tmp/dup.db"),
             created_at: "2026-01-01T00:00:00Z".to_string(),
+            description: None,
+            file_path: PathBuf::from("/tmp/dup"),
         };
 
         repo.save(&project).await.unwrap();

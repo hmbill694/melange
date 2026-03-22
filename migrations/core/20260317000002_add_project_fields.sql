@@ -1,0 +1,2 @@
+ALTER TABLE projects ADD COLUMN description TEXT;
+ALTER TABLE projects ADD COLUMN file_path TEXT NOT NULL DEFAULT '';

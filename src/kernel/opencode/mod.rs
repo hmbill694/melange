@@ -1,9 +1,9 @@
-//! Opencode startup check primitive.
+//! Opencode startup check domain logic.
 //!
-//! Provides `OpencodeStatus` for check logic and `opencode_not_found_screen` for the iced view.
+//! Provides `OpencodeStatus` for check logic.
+//!
+//! Note: UI components have been moved to src/ui/opencode.rs
 
 pub mod domain;
-pub mod ui;
 
 pub use domain::{check_opencode_on_path, OpencodeStatus};
-pub use ui::opencode_not_found_screen;

@@ -138,6 +138,8 @@ impl<R: ProjectRepository> ProjectService<R> {
             name: cmd.name.trim().to_string(),
             db_path,
             created_at,
+            description: cmd.description,
+            file_path: cmd.file_path,
         };
 
         // 6. Persist via repository.
@@ -228,6 +230,8 @@ mod tests {
         let result = service
             .create_project(CreateProjectCommand {
                 name: "My Project".to_string(),
+                description: None,
+                file_path: PathBuf::from("/tmp/my_project"),
             })
             .await;
 
@@ -251,6 +255,8 @@ mod tests {
         let result = service
             .create_project(CreateProjectCommand {
                 name: "   ".to_string(),
+                description: None,
+                file_path: PathBuf::from("/tmp/blank_project"),
             })
             .await;
 
@@ -269,6 +275,8 @@ mod tests {
         service
             .create_project(CreateProjectCommand {
                 name: "X".to_string(),
+                description: None,
+                file_path: PathBuf::from("/tmp/x_project"),
             })
             .await
             .unwrap();
@@ -290,12 +298,16 @@ mod tests {
                 name: "First".to_string(),
                 db_path: PathBuf::from("/tmp/first.db"),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
+                description: None,
+                file_path: PathBuf::from("/tmp/first"),
             };
             let p2 = Project {
                 id: ProjectId::new(),
                 name: "Second".to_string(),
                 db_path: PathBuf::from("/tmp/second.db"),
                 created_at: "2026-01-02T00:00:00Z".to_string(),
+                description: None,
+                file_path: PathBuf::from("/tmp/second"),
             };
             map.insert(p1.id.to_string(), p1);
             map.insert(p2.id.to_string(), p2);

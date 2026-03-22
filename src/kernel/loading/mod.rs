@@ -1,9 +1,9 @@
-//! Cross-cutting loading indicator primitive.
+//! Cross-cutting loading indicator domain logic.
 //!
-//! Provides `LoadingState` for timing logic and `loading_indicator` for the iced view.
+//! Provides `LoadingState` for timing logic.
+//!
+//! Note: UI components have been moved to src/ui/loading.rs
 
 pub mod domain;
-pub mod ui;
 
 pub use domain::{LoadingState, MIN_LOADING_DURATION};
-pub use ui::loading_indicator;

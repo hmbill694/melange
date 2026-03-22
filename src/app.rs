@@ -6,16 +6,19 @@
 //! - `App` owns the `CoreDb`; repositories receive a cloned reference.
 //! - Module messages are wrapped as variants: e.g., Message::Foo(modules::foo::Message).
 
-use anyhow::{anyhow, Result};
-use iced::widget::{column, container, text};
+mod service;
+
+use anyhow::Result;
 use iced::time::Duration;
-use iced::{Element, Fill, Subscription, Task};
-use std::path::PathBuf;
+use iced::{Element, Subscription, Task};
 use std::time::Instant;
 
 use crate::db::CoreDb;
-use crate::kernel::loading::{loading_indicator, LoadingState, MIN_LOADING_DURATION};
-use crate::kernel::opencode::{check_opencode_on_path, opencode_not_found_screen, OpencodeStatus};
+use crate::kernel::loading::LoadingState;
+use crate::kernel::opencode::{check_opencode_on_path, OpencodeStatus};
+use crate::modules::project::ProjectMessage;
+use crate::ui::app::{HomeScreenState, view_app, handle_update, UpdateContext, HomeScreenUpdateContext};
+
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +42,13 @@ pub struct App {
     /// Holds the result of the startup opencode binary check.
     /// `None` means the check has not yet completed.
     opencode_status: Option<OpencodeStatus>,
+
+    /// State for the home screen project browser.
+    /// Delegated to ui::app::state module.
+    home_screen_state: HomeScreenState,
+
+    /// Current window width in logical pixels; drives grid vs. list layout.
+    window_width: f32,
 }
 
 impl Default for App {
@@ -49,6 +59,8 @@ impl Default for App {
             loading_state: LoadingState::Idle,
             tick_count: 0,
             opencode_status: None,
+            home_screen_state: HomeScreenState::default(),
+            window_width: 1024.0,
         }
     }
 }
@@ -76,7 +88,12 @@ pub enum Message {
 
     /// Sent when the startup opencode check finds the binary is NOT on PATH.
     OpencodeNotFound,
-    // Future variants added here as new modules are introduced.
+
+    /// Wraps all messages originating from the project module UI and tasks.
+    Project(ProjectMessage),
+
+    /// Fired by the window-resize subscription; carries the new width in logical pixels.
+    WindowResized(f32),
 }
 
 // ─── BOOT FUNCTION ───────────────────────────────────────────────────────────
@@ -92,11 +109,13 @@ pub fn new() -> (App, Task<Message>) {
         core_db: None,
         init_error: None,
         opencode_status: None,
+        home_screen_state: HomeScreenState::default(),
+        window_width: 1024.0,
     };
 
     let db_task = Task::perform(
-        async { init_db().await },
-        |result| match result {
+        async { service::init_db().await },
+        |result: Result<CoreDb>| match result {
             Ok(core_db) => Message::DbReady(core_db),
             Err(e) => Message::DbFailed(e.to_string()),
         },
@@ -113,66 +132,46 @@ pub fn new() -> (App, Task<Message>) {
     (initial_state, Task::batch([db_task, opencode_task]))
 }
 
-/// Private async helper that opens the core database. Called only by [`new`].
-async fn init_db() -> Result<CoreDb> {
-    let base = dirs::data_dir().ok_or_else(|| anyhow!("Cannot determine app data directory"))?;
-    let app_data_dir: PathBuf = base.join("melange");
-    tracing::info!("Initializing core database at {:?}", app_data_dir);
-    let core_db = CoreDb::open(&app_data_dir).await?;
-    tracing::info!("Core database ready");
-    Ok(core_db)
-}
+
 
 // ─── UPDATE FUNCTION ─────────────────────────────────────────────────────────
 
 /// Handle an incoming [`Message`], mutate `state`, and optionally return a
 /// follow-up [`Task`].
+///
+/// This is now a thin wrapper that delegates to ui::app::update::handle_update
+/// to keep the application logic separated from the orchestration layer.
 pub fn update(state: &mut App, message: Message) -> Task<Message> {
-    match message {
-        Message::DbReady(core_db) => {
-            tracing::info!("Core database pool received");
-            state.core_db = Some(core_db);
-
-            if let LoadingState::Loading { started_at } = state.loading_state {
-                Task::perform(
-                    async move {
-                        let elapsed = started_at.elapsed();
-                        if elapsed < MIN_LOADING_DURATION {
-                            tokio::time::sleep(MIN_LOADING_DURATION - elapsed).await;
-                        }
-                    },
-                    |_| Message::LoadingDone,
-                )
-            } else {
-                Task::none()
-            }
-        }
-        Message::DbFailed(err) => {
-            tracing::error!("Database initialization failed: {}", err);
-            state.init_error = Some(err);
-            state.loading_state = LoadingState::Done;
-            Task::none()
-        }
-        Message::Tick => {
-            state.tick_count = state.tick_count.wrapping_add(1);
-            Task::none()
-        }
-        Message::LoadingDone => {
-            state.loading_state = LoadingState::Done;
-            tracing::info!("Loading complete — minimum duration satisfied");
-            Task::none()
-        }
-        Message::OpencodeReady => {
-            tracing::info!("opencode binary found on PATH — proceeding normally");
-            state.opencode_status = Some(OpencodeStatus::Found);
-            Task::none()
-        }
-        Message::OpencodeNotFound => {
-            tracing::warn!("opencode binary NOT found on PATH — showing blocked screen");
-            state.opencode_status = Some(OpencodeStatus::NotFound);
-            Task::none()
-        }
-    }
+    // Create update contexts from App state
+    let mut app_context = UpdateContext {
+        core_db: state.core_db.clone(),
+        init_error: state.init_error.clone(),
+        loading_state: state.loading_state.clone(),
+        tick_count: state.tick_count,
+        opencode_status: state.opencode_status.clone(),
+        window_width: state.window_width,
+    };
+    
+    let mut home_context = HomeScreenUpdateContext {
+        projects: state.home_screen_state.projects.clone(),
+        search_query: state.home_screen_state.search_query.clone(),
+    };
+    
+    // Delegate to the dedicated update handler
+    let task = handle_update(&mut app_context, &mut home_context, message);
+    
+    // Sync context changes back to App state
+    // (Fields that might have been modified by handle_update)
+    state.core_db = app_context.core_db;
+    state.init_error = app_context.init_error;
+    state.loading_state = app_context.loading_state;
+    state.tick_count = app_context.tick_count;
+    state.opencode_status = app_context.opencode_status;
+    state.window_width = app_context.window_width;
+    state.home_screen_state.projects = home_context.projects;
+    state.home_screen_state.search_query = home_context.search_query;
+    
+    task
 }
 
 // ─── SUBSCRIPTION FUNCTION ───────────────────────────────────────────────────
@@ -182,12 +181,18 @@ pub fn update(state: &mut App, message: Message) -> Task<Message> {
 /// Fires `Message::Tick` every 100ms while `loading_state` is `Loading`, driving
 /// the spinner animation. Automatically stops once loading completes.
 pub fn subscription(state: &App) -> Subscription<Message> {
-    match state.loading_state {
+    let tick_sub = match state.loading_state {
         LoadingState::Loading { .. } => {
             iced::time::every(Duration::from_millis(100)).map(|_| Message::Tick)
         }
         _ => Subscription::none(),
-    }
+    };
+
+    // Subscribe to window resize events to keep `window_width` in sync.
+    let resize_sub = iced::window::resize_events()
+        .map(|(_, size)| Message::WindowResized(size.width));
+
+    Subscription::batch([tick_sub, resize_sub])
 }
 
 // ─── VIEW FUNCTION ───────────────────────────────────────────────────────────
@@ -199,26 +204,18 @@ pub fn subscription(state: &App) -> Subscription<Message> {
 /// 2. DB init error → centered error message
 /// 3. Still loading OR opencode check not yet resolved → loading spinner
 /// 4. Ready → main UI
+///
+/// This is now a thin wrapper that delegates to ui::app::view::view_app
+/// to keep view composition logic separated from the orchestration layer.
 pub fn view(state: &App) -> Element<'_, Message> {
-    // Priority 1: opencode not found → hard block (highest priority)
-    if state.opencode_status == Some(OpencodeStatus::NotFound) {
-        return opencode_not_found_screen();
-    }
-
-    // Priority 2: DB initialization failed
-    if let Some(ref err) = state.init_error {
-        return container(text(format!("Failed to initialize database: {}", err)))
-            .center(Fill)
-            .into();
-    }
-
-    // Priority 3: still loading OR opencode check not yet resolved
-    if state.loading_state != LoadingState::Done || state.opencode_status.is_none() {
-        return loading_indicator("Initialising…", state.tick_count);
-    }
-
-    // Priority 4: ready — main UI placeholder
-    container(column![text("Melange").size(32), text("Ready.")].spacing(10))
-        .center(Fill)
-        .into()
+    // Delegate to the dedicated view function
+    view_app(
+        state.opencode_status.clone(),
+        state.init_error.clone(),
+        state.loading_state.clone(),
+        state.tick_count,
+        &state.home_screen_state.projects,
+        &state.home_screen_state.search_query,
+        state.window_width,
+    )
 }
