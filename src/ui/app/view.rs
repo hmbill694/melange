@@ -7,10 +7,12 @@ use crate::app::Message;
 use crate::kernel::loading::LoadingState;
 use crate::kernel::opencode::OpencodeStatus;
 use crate::modules::project::domain::Project;
+use crate::modules::project::message::ProjectMessage;
+
 use crate::ui::app_bar::app_bar;
 use crate::ui::loading::loading_indicator;
 use crate::ui::opencode::opencode_not_found_screen;
-use crate::ui::project::home_screen;
+use crate::ui::project::{create_project_screen, home_screen};
 use iced::widget::{column, container, text};
 use iced::{Element, Fill};
 
@@ -30,6 +32,8 @@ use iced::{Element, Fill};
 /// - projects: reference to slice of Projects - loaded projects list
 /// - search_query: reference to str - current search filter
 /// - window_width: f32 - current window width for responsive layout
+/// - current_screen: CurrentScreen - which screen to display
+/// - create_project_state: reference to CreateProjectState - form state for Create Project screen
 ///
 /// Returns: Element with Message type
 pub fn view_app<'a>(
@@ -40,6 +44,8 @@ pub fn view_app<'a>(
     projects: &'a [Project],
     search_query: &'a str,
     window_width: f32,
+    current_screen: crate::ui::app::state::CurrentScreen,
+    create_project_state: &'a crate::ui::app::state::CreateProjectState,
 ) -> Element<'a, Message> {
     // Determine screen_content based on priority logic
     let screen_content: Element<'a, Message> = if opencode_status == Some(OpencodeStatus::NotFound)
@@ -55,8 +61,25 @@ pub fn view_app<'a>(
         // Priority 3: still loading OR opencode check not yet resolved
         loading_indicator("Initialising…", tick_count)
     } else {
-        // Priority 4: ready — home screen project browser
-        home_screen(projects, search_query, window_width).map(Message::Project)
+        // Priority 4: ready — screen routing based on current_screen
+        match current_screen {
+            crate::ui::app::state::CurrentScreen::Home => home_screen(
+                projects,
+                search_query,
+                window_width,
+                ProjectMessage::NavigateToCreateProject,
+            )
+            .map(Message::Project),
+            crate::ui::app::state::CurrentScreen::CreateProject => create_project_screen(
+                create_project_state,
+                |s| ProjectMessage::CreateProjectNameChanged(s),
+                |s| ProjectMessage::CreateProjectPathChanged(s),
+                ProjectMessage::CreateProjectSubmitted,
+                ProjectMessage::NavigateToHome,
+                ProjectMessage::NavigateToHome,
+            )
+            .map(Message::Project),
+        }
     };
 
     // Compose app bar above screen content in a column layout

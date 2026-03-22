@@ -2,7 +2,7 @@
 //!
 //! All functions are pure view logic — no I/O, no async.
 
-use iced::widget::{column, container, row, text, text_input};
+use iced::widget::{button, column, container, row, text, text_input};
 use iced::Element;
 
 use crate::modules::project::domain::Project;
@@ -14,14 +14,22 @@ use crate::modules::project::message::ProjectMessage;
 /// - `projects`     — full list of loaded projects
 /// - `search_query` — current value of the search input
 /// - `window_width` — current window width in logical pixels; controls grid vs. list layout
+/// - `on_create_project` — message to send when Create Project button is clicked
 pub fn home_screen<'a>(
     projects: &'a [Project],
     search_query: &'a str,
     window_width: f32,
+    on_create_project: ProjectMessage,
 ) -> Element<'a, ProjectMessage> {
-    // 1. Build search bar.
+    // 1. Build search bar with Create Project button.
     let search_bar =
         text_input("Search projects…", search_query).on_input(ProjectMessage::SearchChanged);
+
+    let create_project_button = button("Create Project").on_press(on_create_project);
+
+    let search_row = row![search_bar, create_project_button]
+        .spacing(16)
+        .align_y(iced::Alignment::Center);
 
     // 2. Filter projects by search query.
     let query = search_query.to_lowercase();
@@ -54,7 +62,7 @@ pub fn home_screen<'a>(
     };
 
     // 5. Compose final element.
-    column![search_bar, content].spacing(16).padding(24).into()
+    column![search_row, content].spacing(16).padding(24).into()
 }
 
 /// Render a single project card.
@@ -102,4 +110,77 @@ fn grid_layout<'a>(cards: Vec<Element<'a, ProjectMessage>>) -> Element<'a, Proje
 /// Arrange cards in a single vertical list.
 fn list_layout<'a>(cards: Vec<Element<'a, ProjectMessage>>) -> Element<'a, ProjectMessage> {
     column(cards).spacing(8).into()
+}
+
+/// Render the Create Project form screen.
+///
+/// # Arguments
+/// - `state` — reference to CreateProjectState for form field values
+/// - `on_name_changed` — callback for project name input changes
+/// - `on_path_changed` — callback for file path input changes
+/// - `on_submit` — message to send when form is submitted
+/// - `on_cancel` — message to send when Cancel button is clicked
+/// - `on_back` — message to send when Back button is clicked
+pub fn create_project_screen<'a, F1, F2>(
+    state: &'a crate::ui::app::state::CreateProjectState,
+    on_name_changed: F1,
+    on_path_changed: F2,
+    on_submit: ProjectMessage,
+    on_cancel: ProjectMessage,
+    on_back: ProjectMessage,
+) -> Element<'a, ProjectMessage>
+where
+    F1: 'a + Fn(String) -> ProjectMessage,
+    F2: 'a + Fn(String) -> ProjectMessage,
+{
+    // Header section with Back button and title
+    let back_button = button("< Back").on_press(on_back);
+
+    let title = text("Create Project").size(24);
+
+    let header_row = row![back_button, title]
+        .spacing(16)
+        .align_y(iced::Alignment::Center);
+
+    // Project Name input
+    let name_label = text("Project Name").size(14);
+
+    let name_input =
+        text_input("Enter project name", &state.project_name).on_input(on_name_changed);
+
+    let name_section = column![name_label, name_input].spacing(8);
+
+    // File Path input
+    let path_label = text("File Path").size(14);
+
+    let path_input = text_input("/path/to/project", &state.file_path).on_input(on_path_changed);
+
+    let path_section = column![path_label, path_input].spacing(8);
+
+    // Error message display (if present)
+    let error_display: Element<'a, ProjectMessage> = if let Some(ref error) = state.error_message {
+        text(error).size(14).into()
+    } else {
+        container(column![]).into()
+    };
+
+    // Button row with Cancel and Create Project buttons
+    let cancel_button = button("Cancel").on_press(on_cancel);
+
+    let create_button = button("Create Project").on_press(on_submit);
+
+    let button_row = row![cancel_button, create_button].spacing(16);
+
+    // Compose all sections
+    let content = column![
+        header_row,
+        name_section,
+        path_section,
+        error_display,
+        button_row
+    ]
+    .spacing(24)
+    .padding(24);
+
+    content.into()
 }

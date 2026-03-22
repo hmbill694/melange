@@ -155,6 +155,8 @@ pub fn update(state: &mut App, message: Message) -> Task<Message> {
     let mut home_context = HomeScreenUpdateContext {
         projects: state.home_screen_state.projects.clone(),
         search_query: state.home_screen_state.search_query.clone(),
+        current_screen: state.home_screen_state.current_screen.clone(),
+        create_project_state: state.home_screen_state.create_project_state.clone(),
     };
     
     // Delegate to the dedicated update handler
@@ -170,6 +172,8 @@ pub fn update(state: &mut App, message: Message) -> Task<Message> {
     state.window_width = app_context.window_width;
     state.home_screen_state.projects = home_context.projects;
     state.home_screen_state.search_query = home_context.search_query;
+    state.home_screen_state.current_screen = home_context.current_screen;
+    state.home_screen_state.create_project_state = home_context.create_project_state;
     
     task
 }
@@ -217,5 +221,7 @@ pub fn view(state: &App) -> Element<'_, Message> {
         &state.home_screen_state.projects,
         &state.home_screen_state.search_query,
         state.window_width,
+        state.home_screen_state.current_screen.clone(),
+        &state.home_screen_state.create_project_state,
     )
 }
