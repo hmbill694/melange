@@ -3,7 +3,7 @@
 //! All functions are pure view logic — no I/O, no async.
 
 use iced::widget::{button, column, container, row, text, text_input};
-use iced::Element;
+use iced::{Element, Length};
 
 use crate::modules::project::domain::Project;
 use crate::modules::project::message::ProjectMessage;
@@ -125,6 +125,7 @@ pub fn create_project_screen<'a, F1, F2>(
     state: &'a crate::ui::app::state::CreateProjectState,
     on_name_changed: F1,
     on_path_changed: F2,
+    on_browse: ProjectMessage,
     on_submit: ProjectMessage,
     on_cancel: ProjectMessage,
     on_back: ProjectMessage,
@@ -150,12 +151,20 @@ where
 
     let name_section = column![name_label, name_input].spacing(8);
 
-    // File Path input
+    // File Path input with Browse button
     let path_label = text("File Path").size(14);
 
-    let path_input = text_input("/path/to/project", &state.file_path).on_input(on_path_changed);
+    let path_input = text_input("/path/to/project", &state.file_path)
+        .on_input(on_path_changed)
+        .width(Length::Fill); // Input takes available space
 
-    let path_section = column![path_label, path_input].spacing(8);
+    let browse_button = button("Browse").on_press(on_browse); // Fires ProjectMessage::BrowseForFilePath
+
+    let path_input_row = row![path_input, browse_button]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+    let path_section = column![path_label, path_input_row].spacing(8);
 
     // Error message display (if present)
     let error_display: Element<'a, ProjectMessage> = if let Some(ref error) = state.error_message {

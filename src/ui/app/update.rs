@@ -11,6 +11,7 @@ use crate::modules::project::domain::Project;
 use crate::modules::project::service::ProjectService;
 use crate::app::Message;
 use iced::Task;
+
 use std::path::PathBuf;
 use tracing;
 
@@ -217,6 +218,52 @@ pub fn handle_update(
                 ProjectMessage::CreateProjectFailed(error) => {
                     home_context.create_project_state.is_submitting = false;
                     home_context.create_project_state.error_message = Some(error);
+                    Task::none()
+                }
+
+                ProjectMessage::BrowseForFilePath => {
+                    tracing::info!("Browse button clicked - opening file picker dialog");
+
+                    // Spawn async task to open native folder picker
+                    // Using spawn_blocking because rfd::FileDialog is synchronous and must run on main thread on macOS
+
+                    let dialog_task = Task::perform(
+                        async {
+                            // File dialogs on macOS must run on the main thread
+                            // We use spawn_blocking to avoid blocking the async runtime
+                            let path_result = tokio::task::spawn_blocking(|| {
+                                rfd::FileDialog::new()
+                                    .set_title("Select Project Folder")
+                                    .pick_folder()
+                            })
+                            .await
+                            .ok()
+                            .flatten();
+
+                            path_result.map(|p| p.to_string_lossy().to_string())
+                        },
+                        |path_option| {
+                            tracing::info!("File picker completed, path selected: {:?}", path_option.is_some());
+                            Message::Project(ProjectMessage::FilePathSelected(path_option))
+                        },
+                    );
+
+                    dialog_task
+                }
+
+                ProjectMessage::FilePathSelected(path_option) => {
+                    tracing::info!("FilePathSelected message received: {:?}", path_option.is_some());
+
+                    // If user selected a path (didn't cancel), update the form
+                    if let Some(selected_path) = path_option {
+                        tracing::info!("Updating file_path to: {}", selected_path);
+                        home_context.create_project_state.file_path = selected_path;
+                        home_context.create_project_state.error_message = None;
+                    } else {
+                        tracing::info!("No path selected (dialog cancelled)");
+                    }
+                    // If None (user cancelled), do nothing - leave form unchanged
+
                     Task::none()
                 }
             }

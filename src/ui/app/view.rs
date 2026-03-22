@@ -74,6 +74,7 @@ pub fn view_app<'a>(
                 create_project_state,
                 |s| ProjectMessage::CreateProjectNameChanged(s),
                 |s| ProjectMessage::CreateProjectPathChanged(s),
+                ProjectMessage::BrowseForFilePath,
                 ProjectMessage::CreateProjectSubmitted,
                 ProjectMessage::NavigateToHome,
                 ProjectMessage::NavigateToHome,

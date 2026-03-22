@@ -37,4 +37,10 @@ pub enum ProjectMessage {
 
     /// Form submission failure: Project creation failed.
     CreateProjectFailed(String),
+
+    /// Browse button clicked: request to open file picker dialog.
+    BrowseForFilePath,
+
+    /// Async result from file picker: contains selected path or None if cancelled.
+    FilePathSelected(Option<String>),
 }
