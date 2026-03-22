@@ -5,7 +5,9 @@
 //! and update handling.
 
 // Re-export state types
-pub use state::HomeScreenState;
+// Note: CurrentScreen and CreateProjectState are re-exported for external module usage
+#[allow(unused_imports)]
+pub use state::{HomeScreenState, CurrentScreen, CreateProjectState};
 
 // Re-export view functions
 pub use view::view_app;
@@ -14,6 +16,6 @@ pub use view::view_app;
 pub use update::{handle_update, UpdateContext, HomeScreenUpdateContext};
 
 // Declare submodules
-mod state;
+pub mod state;
 mod view;
 mod update;
